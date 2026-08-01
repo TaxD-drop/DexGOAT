@@ -17,6 +17,8 @@ local source = game:HttpGet(baseUrl .. "DeGOATExecutor/DeGOAT.bundle.lua")
 local chunk, compileError = loadstring(source, "@DeGOAT.bundle.lua")
 assert(chunk, compileError)
 local DeGOAT = chunk()
-local app = DeGOAT.start()
+local app = DeGOAT.start({
+	IconBaseUrl = baseUrl .. "DeGOATClient/Icons/",
+})
 environment.DeGOATApp = app
 return app
