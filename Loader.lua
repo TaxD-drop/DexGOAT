@@ -1,5 +1,5 @@
 -- Troque somente esta URL depois de publicar o projeto.
-local DEFAULT_BASE_URL = "https://raw.githubusercontent.com/TaxD-drop/DexGOAT/main"
+local DEFAULT_BASE_URL = "https://raw.githubusercontent.com/TaxD-drop/DexGOAT/refs/heads/main/"
 
 local environment = _G
 if type(getgenv) == "function" then
