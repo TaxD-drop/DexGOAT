@@ -1,5 +1,5 @@
 -- Troque somente esta URL depois de publicar o projeto.
-local DEFAULT_BASE_URL = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/GOATDecode/"
+local DEFAULT_BASE_URL = "https://raw.githubusercontent.com/TaxD-drop/DexGOAT/main"
 
 local environment = _G
 if type(getgenv) == "function" then
@@ -8,7 +8,7 @@ if type(getgenv) == "function" then
 end
 
 local baseUrl = environment.DEGOAT_BASE_URL or DEFAULT_BASE_URL
-assert(not baseUrl:find("SEU_USUARIO",1,true), "configure DEFAULT_BASE_URL em Loader.lua")
+assert(not baseUrl:find("TaxD-drop",1,true), "configure DEFAULT_BASE_URL em Loader.lua")
 if baseUrl:sub(-1) ~= "/" then baseUrl ..= "/" end
 
 if environment.DeGOATApp and type(environment.DeGOATApp.Destroy) == "function" then
