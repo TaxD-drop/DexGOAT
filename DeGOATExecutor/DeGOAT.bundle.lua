@@ -25,6 +25,7 @@ node("Naming", "Core.Naming", core)
 node("Decompiler", "Core.Decompiler", core)
 node("BytecodeProvider", "Providers.BytecodeProvider", providers)
 node("Theme", "UI.Theme", ui)
+node("Layout", "UI.Layout", ui)
 node("Editor", "UI.Editor", ui)
 node("Explorer", "UI.Explorer", ui)
 node("App", "UI.App", ui)
@@ -47,7 +48,7 @@ factories["init"] = function(script, require)
 local Config=require(script.Config)
 local App=require(script.UI.App)
 
-local DeGOATClient={ Version="0.3.0-luau" }
+local DeGOATClient={ Version="0.4.0-luau" }
 
 function DeGOATClient.start(overrides)
 	local config=table.clone(Config)
@@ -65,6 +66,15 @@ return {
 	InitialSize = UDim2.fromOffset(980, 620),
 	ExplorerWidth = 330,
 	RowHeight = 22,
+	ScreenPadding = 12,
+	MinimumWidth = 480,
+	MinimumHeight = 300,
+	MinimumEditorWidth = 280,
+	MobileBreakpointWidth = 760,
+	MobileBreakpointHeight = 520,
+	StackBreakpointWidth = 620,
+	MobileExplorerRatio = 0.34,
+	MobileExplorerMin = 180,
 	LongPressSeconds = 0.55,
 	AutoBytecode = true,
 	UseExecutorUI = true,
@@ -1133,6 +1143,46 @@ return {
 
 end
 
+factories["UI.Layout"] = function(script, require)
+local Layout = {}
+
+function Layout.window(viewportWidth,viewportHeight,config,currentWidth,currentHeight,resetSize)
+	local padding=config.ScreenPadding
+	local maximumWidth=math.max(1,viewportWidth-padding*2)
+	local maximumHeight=math.max(1,viewportHeight-padding*2)
+	local desiredWidth=resetSize and config.InitialSize.X.Offset or currentWidth
+	local desiredHeight=resetSize and config.InitialSize.Y.Offset or currentHeight
+	if desiredWidth<=1 then desiredWidth=config.InitialSize.X.Offset end
+	if desiredHeight<=1 then desiredHeight=config.InitialSize.Y.Offset end
+	return {
+		width=math.min(desiredWidth,maximumWidth),
+		height=math.min(desiredHeight,maximumHeight),
+		x=viewportWidth/2,y=viewportHeight/2,
+		maximumWidth=maximumWidth,maximumHeight=maximumHeight,
+	}
+end
+
+function Layout.panels(width,height,config,explorerVisible)
+	local compact=width<=config.MobileBreakpointWidth or height<=config.MobileBreakpointHeight
+	local narrow=width<=config.StackBreakpointWidth
+	local maximumExplorer=math.max(0,width-config.MinimumEditorWidth)
+	local requested=compact and math.floor(width*config.MobileExplorerRatio) or config.ExplorerWidth
+	local minimumExplorer=math.min(config.MobileExplorerMin,maximumExplorer)
+	local explorerWidth=narrow and width or math.clamp(requested,minimumExplorer,maximumExplorer)
+	if not explorerVisible then explorerWidth=0 end
+	return {
+		compact=compact,narrow=narrow,explorerWidth=explorerWidth,
+		leftVisible=explorerVisible,
+		dividerVisible=explorerVisible and not narrow,
+		rightVisible=not (narrow and explorerVisible),
+		rightOffset=explorerVisible and not narrow and explorerWidth+1 or 0,
+		rightInset=explorerVisible and not narrow and -explorerWidth-1 or 0,
+	}
+end
+
+return Layout
+end
+
 factories["UI.Editor"] = function(script, require)
 local Theme = require(script.Parent.Theme)
 local TextService = game:GetService("TextService")
@@ -1149,6 +1199,7 @@ end
 function Editor.new(parent)
 	local self = setmetatable({}, Editor)
 	self.tabs, self.active = {}, nil
+	self.fontSize, self.gutterWidth, self.lineHeight = 14, 48, 17
 
 	self.frame = create("Frame", { BackgroundColor3=Theme.Background, BorderSizePixel=0, Size=UDim2.fromScale(1,1), Parent=parent })
 	self.tabBar = create("ScrollingFrame", {
@@ -1186,6 +1237,16 @@ function Editor.new(parent)
 	return self
 end
 
+function Editor:SetCompact(compact)
+	local fontSize, gutterWidth, lineHeight = compact and 12 or 14, compact and 40 or 48, compact and 15 or 17
+	if self.fontSize == fontSize and self.gutterWidth == gutterWidth then return end
+	self.fontSize, self.gutterWidth, self.lineHeight = fontSize, gutterWidth, lineHeight
+	self.text.TextSize = fontSize
+	self.lineNumbers.TextSize = fontSize
+	self.text.Position = UDim2.fromOffset(gutterWidth + 4, 0)
+	self:_updateLines()
+end
+
 function Editor:_updateLines()
 	local count = 1
 	for _ in self.text.Text:gmatch("\n") do count += 1 end
@@ -1194,13 +1255,13 @@ function Editor:_updateLines()
 	self.lineNumbers.Text = table.concat(values,"\n")
 	local widest = 0
 	for line in (self.text.Text .. "\n"):gmatch("(.-)\n") do
-		widest = math.max(widest, TextService:GetTextSize(line,14,Theme.Font,Vector2.new(100000,20)).X)
+		widest = math.max(widest, TextService:GetTextSize(line,self.fontSize,Theme.Font,Vector2.new(100000,20)).X)
 	end
-	local height = math.max(self.code.AbsoluteSize.Y, count * 17 + 10)
-	local width = math.max(self.code.AbsoluteSize.X - 52, widest + 24)
-	self.lineNumbers.Size = UDim2.fromOffset(48,height)
+	local height = math.max(self.code.AbsoluteSize.Y, count * self.lineHeight + 10)
+	local width = math.max(self.code.AbsoluteSize.X - self.gutterWidth - 4, widest + 24)
+	self.lineNumbers.Size = UDim2.fromOffset(self.gutterWidth,height)
 	self.text.Size = UDim2.fromOffset(width,height)
-	self.code.CanvasSize = UDim2.fromOffset(52 + width,height)
+	self.code.CanvasSize = UDim2.fromOffset(self.gutterWidth + 4 + width,height)
 end
 
 function Editor:SetStatus(text, kind)
@@ -1245,242 +1306,473 @@ end
 factories["UI.Explorer"] = function(script, require)
 local Theme = require(script.Parent.Theme)
 local UserInputService = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
 
 local Explorer = {}
 Explorer.__index = Explorer
 
 local function create(className, properties)
-	local object=Instance.new(className) for key,value in pairs(properties or {}) do object[key]=value end return object
+	local object = Instance.new(className)
+	for key, value in pairs(properties or {}) do object[key] = value end
+	return object
 end
 
 local function sortChildren(children)
-	table.sort(children,function(a,b)
-		if a.ClassName==b.ClassName then return a.Name:lower()<b.Name:lower() end
-		return a.ClassName<b.ClassName
+	table.sort(children, function(a, b)
+		local left, right = a.Name:lower(), b.Name:lower()
+		if left == right then return a.ClassName < b.ClassName end
+		return left < right
 	end)
 	return children
 end
 
 function Explorer.new(parent, config, onSelected, onContext)
-	local self=setmetatable({},Explorer)
-	self.config,self.onSelected,self.onContext,self.expanded,self.rows,self.connections=config,onSelected,onContext,{},{},{}
-	self.frame=create("Frame",{BackgroundColor3=Theme.Panel,BorderSizePixel=0,Size=UDim2.fromScale(1,1),Parent=parent})
-	self.search=create("TextBox",{
-		BackgroundColor3=Theme.PanelAlt,BorderColor3=Theme.Border,Position=UDim2.fromOffset(6,6),Size=UDim2.new(1,-12,0,28),
-		ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=13,TextColor3=Theme.Text,PlaceholderText="Pesquisar instâncias...",
-		PlaceholderColor3=Theme.Muted,Text="",Parent=self.frame,
+	local self = setmetatable({}, Explorer)
+	self.config, self.onSelected, self.onContext = config, onSelected, onContext
+	self.expanded, self.rows, self.connections = {}, {}, {}
+	self.rowHeight, self.fontSize = config.RowHeight, 12
+	self.frame = create("Frame", { BackgroundColor3 = Theme.Panel, BorderSizePixel = 0, ClipsDescendants = true, Size = UDim2.fromScale(1, 1), Parent = parent })
+	self.search = create("TextBox", {
+		BackgroundColor3 = Theme.PanelAlt, BorderColor3 = Theme.Border,
+		Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0, 28), ClearTextOnFocus = false,
+		Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = Theme.Text,
+		PlaceholderText = "Pesquisar instâncias...", PlaceholderColor3 = Theme.Muted, Text = "", Parent = self.frame,
 	})
-	self.list=create("ScrollingFrame",{
-		BackgroundTransparency=1,BorderSizePixel=0,Position=UDim2.fromOffset(0,40),Size=UDim2.new(1,0,1,-40),
-		CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollBarThickness=5,Parent=self.frame,
+	self.list = create("ScrollingFrame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true,
+		Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 1, -40), CanvasSize = UDim2.new(),
+		ScrollingDirection = Enum.ScrollingDirection.XY, ScrollBarThickness = 5, Parent = self.frame,
 	})
-	self.layout=create("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Parent=self.list})
-	self.connections[#self.connections+1]=self.search:GetPropertyChangedSignal("Text"):Connect(function() self:Refresh() end)
-	self.connections[#self.connections+1]=game.DescendantAdded:Connect(function(instance) if instance.Parent==game or self.expanded[instance.Parent] then self:_scheduleRefresh() end end)
-	self.connections[#self.connections+1]=game.DescendantRemoving:Connect(function(instance) if self.rows[instance] then self:_scheduleRefresh() end end)
+	self.layout = create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = self.list })
+	self.connections[#self.connections + 1] = self.search:GetPropertyChangedSignal("Text"):Connect(function() self:Refresh() end)
+	self.connections[#self.connections + 1] = self.list:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self:_scheduleRefresh() end)
+	self.connections[#self.connections + 1] = game.DescendantAdded:Connect(function(instance)
+		if instance.Parent == game or self.expanded[instance.Parent] then self:_scheduleRefresh() end
+	end)
+	self.connections[#self.connections + 1] = game.DescendantRemoving:Connect(function(instance)
+		if self.rows[instance] then self:_scheduleRefresh() end
+	end)
 	self:Refresh()
 	return self
 end
 
+function Explorer:SetCompact(compact)
+	local rowHeight, fontSize = compact and 20 or self.config.RowHeight, compact and 11 or 12
+	if rowHeight == self.rowHeight and fontSize == self.fontSize then return end
+	self.rowHeight, self.fontSize = rowHeight, fontSize
+	self.search.TextSize = compact and 12 or 13
+	self:Refresh()
+end
+
 function Explorer:_roots()
 	local result = {}
-	for _,serviceName in ipairs(self.config.RootServices) do
-		local ok, service = pcall(game.GetService,game,serviceName)
-		if ok and service then result[#result+1]=service end
+	for _, serviceName in ipairs(self.config.RootServices) do
+		local ok, service = pcall(game.GetService, game, serviceName)
+		if ok and service then result[#result + 1] = service end
 	end
 	return result
 end
 
-function Explorer:_scheduleRefresh()
-	if self.refreshPending then return end self.refreshPending=true
-	task.defer(function() self.refreshPending=false if self.frame.Parent then self:Refresh() end end)
+function Explorer:_children(parent)
+	local ok, children = pcall(parent.GetChildren, parent)
+	return ok and sortChildren(children) or {}
 end
 
-function Explorer:_flatten(parent,depth,result,query)
-	local ok,children=pcall(parent.GetChildren,parent) if not ok then return end
-	for _,child in ipairs(sortChildren(children)) do
-		if child==self.config.IgnoreInstance or (self.config.IgnoreInstance and child:IsDescendantOf(self.config.IgnoreInstance)) then continue end
-		local matches=query=="" or child.Name:lower():find(query,1,true) or child.ClassName:lower():find(query,1,true)
-		if matches or query=="" then result[#result+1]={instance=child,depth=depth} end
-		if query~="" or self.expanded[child] then self:_flatten(child,depth+1,result,query) end
+function Explorer:_ignored(instance)
+	return instance == self.config.IgnoreInstance or (self.config.IgnoreInstance and instance:IsDescendantOf(self.config.IgnoreInstance))
+end
+
+function Explorer:_flattenExpanded(parent, depth, result)
+	for _, child in ipairs(self:_children(parent)) do
+		if self:_ignored(child) then continue end
+		result[#result + 1] = { instance = child, depth = depth }
+		if self.expanded[child] then self:_flattenExpanded(child, depth + 1, result) end
 	end
 end
 
+function Explorer:_flattenSearch(instance, depth, result, query)
+	if self:_ignored(instance) then return false end
+	local descendants = {}
+	for _, child in ipairs(self:_children(instance)) do self:_flattenSearch(child, depth + 1, descendants, query) end
+	local matches = instance.Name:lower():find(query, 1, true) or instance.ClassName:lower():find(query, 1, true)
+	if not matches and #descendants == 0 then return false end
+	result[#result + 1] = { instance = instance, depth = depth }
+	for _, row in ipairs(descendants) do result[#result + 1] = row end
+	return true
+end
+
+function Explorer:_scheduleRefresh()
+	if self.refreshPending then return end
+	self.refreshPending = true
+	task.defer(function()
+		self.refreshPending = false
+		if self.frame.Parent then self:Refresh() end
+	end)
+end
+
 function Explorer:_icon(instance)
-	if instance:IsA("LuaSourceContainer") then return "◆"
-	elseif instance:IsA("BasePart") then return "▣"
-	elseif instance:IsA("Model") then return "◇"
-	elseif instance:IsA("Folder") then return "▤" end
+	if instance:IsA("LuaSourceContainer") then return "◆" end
+	if instance:IsA("BasePart") then return "▣" end
+	if instance:IsA("Model") then return "◇" end
+	if instance:IsA("Folder") then return "▤" end
+	if instance.Parent == game then return "▧" end
 	return "•"
 end
 
 function Explorer:Refresh()
-	for _,row in pairs(self.rows) do if typeof(row)=="Instance" then row:Destroy() end end self.rows={}
-	local flat,query={},self.search.Text:lower()
-	for _,service in ipairs(self:_roots()) do
-		local matches=query=="" or service.Name:lower():find(query,1,true) or service.ClassName:lower():find(query,1,true)
-		if matches or query=="" then flat[#flat+1]={instance=service,depth=0} end
-		if query~="" or self.expanded[service] then self:_flatten(service,1,flat,query) end
+	for _, row in pairs(self.rows) do if typeof(row) == "Instance" then row:Destroy() end end
+	self.rows = {}
+	local flat, query = {}, self.search.Text:lower()
+	if query ~= "" then
+		for _, service in ipairs(self:_roots()) do self:_flattenSearch(service, 0, flat, query) end
+	else
+		for _, service in ipairs(self:_roots()) do
+			flat[#flat + 1] = { instance = service, depth = 0 }
+			if self.expanded[service] then self:_flattenExpanded(service, 1, flat) end
+		end
 	end
-	for order,node in ipairs(flat) do
-		local instance,depth=node.instance,node.depth
-		local hasChildren=false pcall(function() hasChildren=#instance:GetChildren()>0 end)
-		local button=create("TextButton",{
-			AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(1,0,0,self.config.RowHeight),
-			Font=Enum.Font.Gotham,TextSize=12,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,
-			Text=string.rep("   ",depth)..(hasChildren and (self.expanded[instance] and "▼ " or "▶ ") or "   ")..self:_icon(instance).."  "..instance.Name,
-			LayoutOrder=order,Parent=self.list,
+
+	local maximumWidth = math.max(1, self.list.AbsoluteSize.X)
+	for order, node in ipairs(flat) do
+		local instance, depth = node.instance, node.depth
+		local hasChildren = #self:_children(instance) > 0
+		local rowText = "  " .. string.rep("   ", depth) .. (hasChildren and (self.expanded[instance] and "▼ " or "▶ ") or "   ") .. self:_icon(instance) .. "  " .. instance.Name
+		local measured = TextService:GetTextSize(rowText, self.fontSize, Enum.Font.Gotham, Vector2.new(100000, self.rowHeight)).X + 18
+		local rowWidth = math.max(maximumWidth, measured)
+		maximumWidth = math.max(maximumWidth, rowWidth)
+		local selected = self.selected == instance
+		local button = create("TextButton", {
+			AutoButtonColor = false, BackgroundColor3 = Theme.Selected,
+			BackgroundTransparency = selected and 0.25 or 1, BorderSizePixel = 0,
+			Size = UDim2.fromOffset(rowWidth, self.rowHeight), Font = Enum.Font.Gotham,
+			TextSize = self.fontSize, TextColor3 = Theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+			Text = rowText, LayoutOrder = order, Parent = self.list,
 		})
-		button.MouseEnter:Connect(function() button.BackgroundTransparency=.6 button.BackgroundColor3=Theme.Selected end)
-		button.MouseLeave:Connect(function() button.BackgroundTransparency=1 end)
-		local pressToken,longPressed=0,false
+		button.MouseEnter:Connect(function() button.BackgroundTransparency = 0.45 end)
+		button.MouseLeave:Connect(function() button.BackgroundTransparency = self.selected == instance and 0.25 or 1 end)
+		local pressToken, longPressed = 0, false
 		button.MouseButton1Down:Connect(function()
-			pressToken+=1 local token=pressToken longPressed=false
-			task.delay(self.config.LongPressSeconds,function()
-				if token==pressToken and button.Parent then
-					longPressed=true
-					self.onContext(instance,button.AbsolutePosition+Vector2.new(24,self.config.RowHeight))
+			pressToken += 1
+			local token = pressToken
+			longPressed = false
+			task.delay(self.config.LongPressSeconds, function()
+				if token == pressToken and button.Parent then
+					longPressed = true
+					self.selected = instance
+					self.onContext(instance, button.AbsolutePosition + Vector2.new(24, self.rowHeight))
 				end
 			end)
 		end)
-		button.MouseButton1Up:Connect(function() pressToken+=1 end)
+		button.MouseButton1Up:Connect(function() pressToken += 1 end)
 		button.MouseButton2Click:Connect(function()
-			self.onContext(instance,UserInputService:GetMouseLocation())
+			self.selected = instance
+			self.onContext(instance, UserInputService:GetMouseLocation())
 		end)
 		button.MouseButton1Click:Connect(function()
-			if longPressed then longPressed=false return end
-			if hasChildren then self.expanded[instance]=not self.expanded[instance]; self:Refresh() end
+			if longPressed then longPressed = false return end
+			self.selected = instance
+			if hasChildren then self.expanded[instance] = not self.expanded[instance] end
+			self:Refresh()
 			self.onSelected(instance)
 		end)
-		self.rows[instance]=button
+		self.rows[instance] = button
 	end
+	self.list.CanvasSize = UDim2.fromOffset(maximumWidth, #flat * self.rowHeight)
 end
 
 function Explorer:Destroy()
-	for _,connection in ipairs(self.connections) do connection:Disconnect() end
-	self.connections={}
+	for _, connection in ipairs(self.connections) do connection:Disconnect() end
+	self.connections = {}
 	self.frame:Destroy()
 end
+
 return Explorer
 end
 
 factories["UI.App"] = function(script, require)
-local Players=game:GetService("Players")
-local UserInputService=game:GetService("UserInputService")
-local Theme=require(script.Parent.Theme)
-local Explorer=require(script.Parent.Explorer)
-local Editor=require(script.Parent.Editor)
-local Parser=require(script.Parent.Parent.Core.Parser)
-local Decompiler=require(script.Parent.Parent.Core.Decompiler)
-local BytecodeProvider=require(script.Parent.Parent.Providers.BytecodeProvider)
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local Theme = require(script.Parent.Theme)
+local Layout = require(script.Parent.Layout)
+local Explorer = require(script.Parent.Explorer)
+local Editor = require(script.Parent.Editor)
+local Parser = require(script.Parent.Parent.Core.Parser)
+local Decompiler = require(script.Parent.Parent.Core.Decompiler)
+local BytecodeProvider = require(script.Parent.Parent.Providers.BytecodeProvider)
 
-local App={} App.__index=App
-local function create(className,properties) local o=Instance.new(className) for k,v in pairs(properties or {}) do o[k]=v end return o end
+local App = {}
+App.__index = App
 
-local function describe(instance)
-	local lines={"-- DeGOAT Instance Inspector","","Name = "..string.format("%q",instance.Name),"ClassName = "..string.format("%q",instance.ClassName),"Path = "..instance:GetFullName(),"","-- Attributes"}
-	for key,value in pairs(instance:GetAttributes()) do lines[#lines+1]=key.." = "..tostring(value) end
-	if #lines==7 then lines[#lines+1]="-- nenhum atributo" end
-	local ok,children=pcall(instance.GetChildren,instance)
-	lines[#lines+1]="" lines[#lines+1]="Children = "..(ok and #children or 0)
-	if instance:IsA("LuaSourceContainer") then
-		lines[#lines+1]="" lines[#lines+1]="-- Segure ou clique com o botão direito para View Script"
-	end
-	return table.concat(lines,"\n")
+local function create(className, properties)
+	local object = Instance.new(className)
+	for key, value in pairs(properties or {}) do object[key] = value end
+	return object
 end
 
-local function guiParent(player,config)
-	if config.UseExecutorUI and type(gethui)=="function" then
-		local ok,value=pcall(gethui)
-		if ok and typeof(value)=="Instance" then return value end
+local function describe(instance)
+	local lines = {
+		"-- DeGOAT Instance Inspector", "",
+		"Name = " .. string.format("%q", instance.Name),
+		"ClassName = " .. string.format("%q", instance.ClassName),
+		"Path = " .. instance:GetFullName(), "", "-- Attributes",
+	}
+	for key, value in pairs(instance:GetAttributes()) do lines[#lines + 1] = key .. " = " .. tostring(value) end
+	if #lines == 7 then lines[#lines + 1] = "-- nenhum atributo" end
+	local ok, children = pcall(instance.GetChildren, instance)
+	lines[#lines + 1] = ""
+	lines[#lines + 1] = "Children = " .. (ok and #children or 0)
+	if instance:IsA("LuaSourceContainer") then
+		lines[#lines + 1] = ""
+		lines[#lines + 1] = "-- Segure ou clique com o botão direito para View Script"
+	end
+	return table.concat(lines, "\n")
+end
+
+local function guiParent(player, config)
+	if config.UseExecutorUI and type(gethui) == "function" then
+		local ok, value = pcall(gethui)
+		if ok and typeof(value) == "Instance" then return value end
 	end
 	return player:WaitForChild("PlayerGui")
 end
 
-function App.new(root,config)
-	local self=setmetatable({},App) self.config=config self.cache=setmetatable({},{__mode="k"}) self.connections={}
-	self.provider=BytecodeProvider.new(config)
-	local player=Players.LocalPlayer or Players.PlayerAdded:Wait()
-	self.gui=create("ScreenGui",{Name="DeGOATExplorer",ResetOnSpawn=false,IgnoreGuiInset=false,DisplayOrder=50,Parent=guiParent(player,config)})
-	config.IgnoreInstance=self.gui
-	self.window=create("Frame",{BackgroundColor3=Theme.Background,BorderColor3=Theme.Border,Size=config.InitialSize,Position=UDim2.new(.5,-490,.5,-310),Parent=self.gui})
-	local title=create("TextLabel",{BackgroundColor3=Theme.PanelAlt,BorderSizePixel=0,Size=UDim2.new(1,0,0,34),Font=Enum.Font.GothamBold,TextSize=14,TextColor3=Theme.Text,TextXAlignment=Enum.TextXAlignment.Left,Text="   "..config.Title,Parent=self.window})
-	local close=create("TextButton",{BackgroundTransparency=1,Position=UDim2.new(1,-40,0,0),Size=UDim2.fromOffset(40,34),Font=Enum.Font.GothamBold,TextSize=16,TextColor3=Theme.Muted,Text="×",Parent=title})
-	local body=create("Frame",{BackgroundTransparency=1,Position=UDim2.fromOffset(0,34),Size=UDim2.new(1,0,1,-34),Parent=self.window})
-	local left=create("Frame",{BackgroundTransparency=1,Size=UDim2.new(0,config.ExplorerWidth,1,0),Parent=body})
-	local divider=create("Frame",{BackgroundColor3=Theme.Border,BorderSizePixel=0,Position=UDim2.fromOffset(config.ExplorerWidth,0),Size=UDim2.new(0,1,1,0),Parent=body})
-	local right=create("Frame",{BackgroundTransparency=1,Position=UDim2.fromOffset(config.ExplorerWidth+1,0),Size=UDim2.new(1,-config.ExplorerWidth-1,1,0),Parent=body})
-	local resize=create("TextButton",{AutoButtonColor=false,BackgroundTransparency=1,AnchorPoint=Vector2.new(1,1),Position=UDim2.fromScale(1,1),Size=UDim2.fromOffset(18,18),Font=Enum.Font.GothamBold,TextSize=12,TextColor3=Theme.Muted,Text="◢",ZIndex=10,Parent=self.window})
-	self.editor=Editor.new(right)
-	self.context=create("Frame",{Visible=false,BackgroundColor3=Theme.PanelAlt,BorderColor3=Theme.Border,Size=UDim2.fromOffset(178,34),ZIndex=50,Parent=self.gui})
-	self.contextButton=create("TextButton",{AutoButtonColor=false,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),Font=Enum.Font.Gotham,TextSize=13,TextColor3=Theme.Text,Text="View Script",ZIndex=51,Parent=self.context})
-	self.contextButton.MouseEnter:Connect(function() self.contextButton.BackgroundTransparency=.35 self.contextButton.BackgroundColor3=Theme.Selected end)
-	self.contextButton.MouseLeave:Connect(function() self.contextButton.BackgroundTransparency=1 end)
+function App:_viewport()
+	local camera = workspace.CurrentCamera
+	return camera and camera.ViewportSize or Vector2.new(1280, 720)
+end
+
+function App:_track(connection)
+	self.connections[#self.connections + 1] = connection
+	return connection
+end
+
+function App:_bindCamera()
+	if self.viewportConnection then self.viewportConnection:Disconnect() end
+	local camera = workspace.CurrentCamera
+	if camera then
+		self.viewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			self:_fitToViewport(false)
+		end)
+	end
+end
+
+function App:_fitToViewport(resetSize)
+	if not self.window or not self.window.Parent then return end
+	local viewport = self:_viewport()
+	local current = self.window.AbsoluteSize
+	local result=Layout.window(viewport.X,viewport.Y,self.config,current.X,current.Y,resetSize)
+	self.window.Size = UDim2.fromOffset(result.width,result.height)
+	self.window.Position = UDim2.fromOffset(result.x,result.y)
+	self:_applyLayout()
+end
+
+function App:_applyLayout()
+	if not self.window or not self.window.Parent then return end
+	local size = self.window.AbsoluteSize
+	local layout=Layout.panels(size.X,size.Y,self.config,self.explorerVisible)
+	local compact,narrow=layout.compact,layout.narrow
+	self.compact, self.narrow = compact, narrow
+	local explorerWidth=layout.explorerWidth
+
+	self.left.Visible = layout.leftVisible
+	self.left.Size = UDim2.new(0, explorerWidth, 1, 0)
+	self.divider.Visible = layout.dividerVisible
+	self.divider.Position = UDim2.fromOffset(explorerWidth, 0)
+	self.right.Visible = layout.rightVisible
+	self.right.Position = UDim2.fromOffset(layout.rightOffset,0)
+	self.right.Size = UDim2.new(1,layout.rightInset,1,0)
+	self.title.TextSize = compact and 12 or 14
+	self.explorer:SetCompact(compact)
+	self.editor:SetCompact(compact)
+end
+
+function App:SetExplorerVisible(visible)
+	self.explorerVisible = visible
+	self.sidebar.Text = visible and "◀" or "☰"
+	self:_applyLayout()
+end
+
+function App.new(root, config)
+	local self = setmetatable({}, App)
+	self.config = config
+	self.cache = setmetatable({}, { __mode = "k" })
+	self.connections = {}
+	self.explorerVisible = true
+	self.provider = BytecodeProvider.new(config)
+	local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+	self.gui = create("ScreenGui", {
+		Name = "DeGOATExplorer", ResetOnSpawn = false, IgnoreGuiInset = true,
+		DisplayOrder = 50, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = guiParent(player, config),
+	})
+	config.IgnoreInstance = self.gui
+	self.window = create("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Theme.Background,
+		BorderColor3 = Theme.Border, ClipsDescendants = true,
+		Size = config.InitialSize, Position = UDim2.fromScale(0.5, 0.5), Parent = self.gui,
+	})
+	self.title = create("TextLabel", {
+		BackgroundColor3 = Theme.PanelAlt, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 34),
+		Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left, Text = "           " .. config.Title, Parent = self.window,
+	})
+	self.sidebar = create("TextButton", {
+		AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(42, 34),
+		Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Theme.Text, Text = "◀", Parent = self.title,
+	})
+	local close = create("TextButton", {
+		BackgroundTransparency = 1, Position = UDim2.new(1, -40, 0, 0), Size = UDim2.fromOffset(40, 34),
+		Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = Theme.Muted, Text = "×", Parent = self.title,
+	})
+	local body = create("Frame", {
+		BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 1, -34), Parent = self.window,
+	})
+	self.left = create("Frame", { BackgroundTransparency = 1, Parent = body })
+	self.divider = create("Frame", { BackgroundColor3 = Theme.Border, BorderSizePixel = 0, Size = UDim2.new(0, 1, 1, 0), Parent = body })
+	self.right = create("Frame", { BackgroundTransparency = 1, Parent = body })
+	local resize = create("TextButton", {
+		AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.fromScale(1, 1), Size = UDim2.fromOffset(22, 22), Font = Enum.Font.GothamBold,
+		TextSize = 12, TextColor3 = Theme.Muted, Text = "◢", ZIndex = 10, Parent = self.window,
+	})
+
+	self.editor = Editor.new(self.right)
+	self.context = create("Frame", {
+		Visible = false, BackgroundColor3 = Theme.PanelAlt, BorderColor3 = Theme.Border,
+		Size = UDim2.fromOffset(178, 34), ZIndex = 50, Parent = self.gui,
+	})
+	self.contextButton = create("TextButton", {
+		AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1),
+		Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = Theme.Text,
+		Text = "View Script", ZIndex = 51, Parent = self.context,
+	})
+	self.contextButton.MouseEnter:Connect(function() self.contextButton.BackgroundTransparency = 0.35 self.contextButton.BackgroundColor3 = Theme.Selected end)
+	self.contextButton.MouseLeave:Connect(function() self.contextButton.BackgroundTransparency = 1 end)
 	self.contextButton.MouseButton1Click:Connect(function()
-		local instance=self.contextInstance self.context.Visible=false
+		local instance = self.contextInstance
+		self.context.Visible = false
 		if not instance then return end
 		if self.provider:IsScript(instance) then self:ViewScript(instance) else self:Select(instance) end
 	end)
-	self.explorer=Explorer.new(left,config,function(instance) self:Select(instance) end,function(instance,position) self:ShowContext(instance,position) end)
-	local capability,available=self.provider:GetCapability()
-	self.editor:SetStatus(available and ("bytecode local: "..capability) or "getscriptbytecode não disponível",available and "success" or "error")
-	close.MouseButton1Click:Connect(function() self.gui.Enabled=false end)
-	local dragging,resizing,startInput,startPosition,startSize=false,false,nil,nil,nil
-	title.InputBegan:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then dragging=true startInput=input.Position startPosition=self.window.Position end end)
-	resize.InputBegan:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then resizing=true startInput=input.Position startSize=self.window.AbsoluteSize end end)
-	self.connections[#self.connections+1]=UserInputService.InputChanged:Connect(function(input)
-		if input.UserInputType~=Enum.UserInputType.MouseMovement and input.UserInputType~=Enum.UserInputType.Touch then return end
-		if dragging then local delta=input.Position-startInput self.window.Position=UDim2.new(startPosition.X.Scale,startPosition.X.Offset+delta.X,startPosition.Y.Scale,startPosition.Y.Offset+delta.Y)
-		elseif resizing then local delta=input.Position-startInput self.window.Size=UDim2.fromOffset(math.max(680,startSize.X+delta.X),math.max(420,startSize.Y+delta.Y)) end
+	self.explorer = Explorer.new(self.left, config, function(instance) self:Select(instance) end, function(instance, position) self:ShowContext(instance, position) end)
+
+	self.sidebar.MouseButton1Click:Connect(function() self:SetExplorerVisible(not self.explorerVisible) end)
+	close.MouseButton1Click:Connect(function() self.gui.Enabled = false end)
+	local capability, available = self.provider:GetCapability()
+	self.editor:SetStatus(available and ("bytecode local: " .. capability) or "getscriptbytecode não disponível", available and "success" or "error")
+
+	local dragging, resizing = false, false
+	local startInput, startCenter, startSize, startTopLeft
+	self.title.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			startInput = input.Position
+			startCenter = self.window.AbsolutePosition + self.window.AbsoluteSize / 2
+		end
 	end)
-	self.connections[#self.connections+1]=UserInputService.InputEnded:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then dragging=false resizing=false end end)
-	self.connections[#self.connections+1]=UserInputService.InputBegan:Connect(function(input,processed) if not processed and input.KeyCode==config.ToggleKey then self.gui.Enabled=not self.gui.Enabled end end)
+	resize.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			resizing = true
+			startInput = input.Position
+			startSize = self.window.AbsoluteSize
+			startTopLeft = self.window.AbsolutePosition
+		end
+	end)
+	self:_track(UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		local viewport = self:_viewport()
+		local padding = config.ScreenPadding
+		if dragging then
+			local half = self.window.AbsoluteSize / 2
+			local desired = startCenter + (input.Position - startInput)
+			local x = math.clamp(desired.X, padding + half.X, math.max(padding + half.X, viewport.X - padding - half.X))
+			local y = math.clamp(desired.Y, padding + half.Y, math.max(padding + half.Y, viewport.Y - padding - half.Y))
+			self.window.Position = UDim2.fromOffset(x, y)
+		elseif resizing then
+			local delta = input.Position - startInput
+			local maximumWidth = math.max(1, viewport.X - padding * 2)
+			local maximumHeight = math.max(1, viewport.Y - padding * 2)
+			local minimumWidth = math.min(config.MinimumWidth, maximumWidth)
+			local minimumHeight = math.min(config.MinimumHeight, maximumHeight)
+			local width = math.clamp(startSize.X + delta.X, minimumWidth, maximumWidth)
+			local height = math.clamp(startSize.Y + delta.Y, minimumHeight, maximumHeight)
+			self.window.Size = UDim2.fromOffset(width, height)
+			self.window.Position = UDim2.fromOffset(startTopLeft.X + width / 2, startTopLeft.Y + height / 2)
+		end
+	end))
+	self:_track(UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging, resizing = false, false end
+	end))
+	self:_track(UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == config.ToggleKey then self.gui.Enabled = not self.gui.Enabled end
+	end))
+	self:_track(self.window:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self:_applyLayout() end))
+	self:_track(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function() self:_bindCamera() self:_fitToViewport(false) end))
+	self:_bindCamera()
+	task.defer(function() self:_fitToViewport(true) end)
 	return self
 end
 
-function App:RegisterBytecode(instance,raw) self.provider:Register(instance,raw) self.cache[instance]=nil end
-function App:SetBytecodeResolver(resolver) self.provider:SetResolver(resolver) self.cache=setmetatable({},{__mode="k"}) end
+function App:RegisterBytecode(instance, raw) self.provider:Register(instance, raw) self.cache[instance] = nil end
+function App:SetBytecodeResolver(resolver) self.provider:SetResolver(resolver) self.cache = setmetatable({}, { __mode = "k" }) end
 
-function App:ShowContext(instance,position)
-	self.contextInstance=instance
-	self.contextButton.Text=self.provider:IsScript(instance) and "  View Script" or "  Inspect Instance"
-	local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
-	local x=math.clamp(position.X,0,math.max(0,viewport.X-182))
-	local y=math.clamp(position.Y,0,math.max(0,viewport.Y-38))
-	self.context.Position=UDim2.fromOffset(x,y)
-	self.context.Visible=true
+function App:ShowContext(instance, position)
+	self.contextInstance = instance
+	self.contextButton.Text = self.provider:IsScript(instance) and "  View Script" or "  Inspect Instance"
+	local viewport = self:_viewport()
+	self.context.Position = UDim2.fromOffset(
+		math.clamp(position.X, 0, math.max(0, viewport.X - 182)),
+		math.clamp(position.Y, 0, math.max(0, viewport.Y - 38))
+	)
+	self.context.Visible = true
 end
 
 function App:Select(instance)
-	self.context.Visible=false
-	self.editor:Open(instance,instance.Name,describe(instance))
+	self.context.Visible = false
+	if self.narrow then self:SetExplorerVisible(false) end
+	self.editor:Open(instance, instance.Name, describe(instance))
 	self.editor:SetStatus(instance.ClassName)
 end
 
 function App:ViewScript(instance)
-	self.context.Visible=false
-	local cached=self.cache[instance]
-	if cached then self.editor:Open(instance,instance.Name,cached); self.editor:SetStatus("cache local","success"); return end
-	self.editor:SetStatus("decompilando "..instance.Name.."...")
+	self.context.Visible = false
+	if self.compact then self:SetExplorerVisible(false) end
+	local cached = self.cache[instance]
+	if cached then self.editor:Open(instance, instance.Name, cached) self.editor:SetStatus("cache local", "success") return end
+	self.editor:SetStatus("decompilando " .. instance.Name .. "...")
 	task.spawn(function()
-		local bytecode,reason=self.provider:GetBytecode(instance)
+		local bytecode, reason = self.provider:GetBytecode(instance)
 		if not bytecode then
-			local message="-- Não foi possível decompilar "..instance:GetFullName().."\n-- "..reason.."\n\n-- O DeGOAT precisa de getscriptbytecode no ambiente para obter os bytes brutos."
-			self.editor:Open(instance,instance.Name,message) self.editor:SetStatus(reason,"error") return
+			local message = "-- Não foi possível decompilar " .. instance:GetFullName() .. "\n-- " .. reason .. "\n\n-- O DeGOAT precisa de getscriptbytecode no ambiente para obter os bytes brutos."
+			self.editor:Open(instance, instance.Name, message)
+			self.editor:SetStatus(reason, "error")
+			return
 		end
-		local started=os.clock()
-		local ok,result=pcall(function() return Decompiler.decompile(Parser.parse(bytecode)) end)
-		if ok then self.cache[instance]=result self.editor:Open(instance,instance.Name,result) self.editor:SetStatus(string.format("decompilado localmente em %.3fs",os.clock()-started),"success")
-		else self.editor:Open(instance,instance.Name,"-- Falha DeGOAT\n-- "..tostring(result)) self.editor:SetStatus("falha no parser/decompiler","error") end
+		local started = os.clock()
+		local ok, result = pcall(function() return Decompiler.decompile(Parser.parse(bytecode)) end)
+		if ok then
+			self.cache[instance] = result
+			self.editor:Open(instance, instance.Name, result)
+			self.editor:SetStatus(string.format("decompilado localmente em %.3fs", os.clock() - started), "success")
+		else
+			self.editor:Open(instance, instance.Name, "-- Falha DeGOAT\n-- " .. tostring(result))
+			self.editor:SetStatus("falha no parser/decompiler", "error")
+		end
 	end)
 end
 
-function App:Toggle() self.gui.Enabled=not self.gui.Enabled end
+function App:Toggle() self.gui.Enabled = not self.gui.Enabled end
+
 function App:Destroy()
-	for _,connection in ipairs(self.connections) do connection:Disconnect() end
-	self.connections={}
-	self.explorer:Destroy(); self.editor:Destroy(); self.gui:Destroy()
+	for _, connection in ipairs(self.connections) do connection:Disconnect() end
+	if self.viewportConnection then self.viewportConnection:Disconnect() end
+	self.connections = {}
+	self.explorer:Destroy()
+	self.editor:Destroy()
+	self.gui:Destroy()
 end
+
 return App
 end
 
