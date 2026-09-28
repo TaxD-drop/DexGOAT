@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1264" height="1099" viewBox="0 0 1264 1099">
+<style>.bg{fill:#111318}.viewport{fill:#20232a;stroke:#39404c}.window{fill:#181a1f;stroke:#485160;stroke-width:2}.title{fill:#262a31}.explorer{fill:#1f2228}.editor{fill:#181a1f}.label{fill:#e6eaf2;font:600 16px sans-serif}.meta{fill:#99a1b2;font:12px sans-serif}.tiny{fill:#dfe4ed;font:12px sans-serif}.tree{fill:#cbd2df;font:11px sans-serif}.code{fill:#dfe4ed;font:11px monospace}</style>
+<rect width="1264" height="744" class="bg"/><text x="24" y="50" class="label">small portrait · 360×800</text>
+<rect x="24" y="62" width="128.25" height="285.0" rx="8" class="viewport"/>
+<rect x="28.275" y="94.0625" width="119.7" height="220.875" rx="6" class="window"/>
+<rect x="28.275" y="94.0625" width="119.7" height="12.1125" rx="6" class="title"/>
+<rect x="28.275" y="106.175" width="119.7" height="208.7625" class="explorer"/>
+<rect x="28.275" y="106.175" width="119.7" height="208.7625" class="editor"/>
+<text x="40.275" y="101.9" class="tiny">☰  DeGOAT Explorer</text>
+<text x="38.275" y="114.725" class="tiny">Pesquisar instâncias…</text>
+<text x="40.275" y="125.4125" class="tree">▾ Workspace</text>
+<text x="50.275" y="132.5375" class="tree">▤ Models</text>
+<text x="40.275" y="116.15" class="code">1  -- DeGOAT Instance Inspector</text>
+<text x="24" y="365.0" class="meta">janela 336×620 · explorer 336 · empilhado</text><text x="644" y="50" class="label">common portrait · 412×915</text>
+<rect x="644" y="62" width="128.32786885245903" height="285.0" rx="8" class="viewport"/>
+<rect x="647.7377049180328" y="107.94262295081967" width="120.85245901639345" height="193.11475409836066" rx="6" class="window"/>
+<rect x="647.7377049180328" y="107.94262295081967" width="120.85245901639345" height="10.59016393442623" rx="6" class="title"/>
+<rect x="647.7377049180328" y="118.5327868852459" width="120.85245901639345" height="182.52459016393442" class="explorer"/>
+<rect x="647.7377049180328" y="118.5327868852459" width="120.85245901639345" height="182.52459016393442" class="editor"/>
+<text x="659.7377049180328" y="114.79508196721311" class="tiny">☰  DeGOAT Explorer</text>
+<text x="657.7377049180328" y="126.00819672131146" class="tiny">Pesquisar instâncias…</text>
+<text x="659.7377049180328" y="135.35245901639342" class="tree">▾ Workspace</text>
+<text x="669.7377049180328" y="141.58196721311475" class="tree">▤ Models</text>
+<text x="659.7377049180328" y="127.25409836065573" class="code">1  -- DeGOAT Instance Inspector</text>
+<text x="644" y="365.0" class="meta">janela 388×620 · explorer 388 · empilhado</text><text x="24" y="405" class="label">small landscape · 800×360</text>
+<rect x="24" y="417" width="570.0" height="256.5" rx="8" class="viewport"/>
+<rect x="32.55000000000001" y="425.55" width="552.9" height="239.4" rx="6" class="window"/>
+<rect x="32.55000000000001" y="425.55" width="552.9" height="24.225" rx="6" class="title"/>
+<rect x="32.55000000000001" y="449.77500000000003" width="187.38750000000002" height="215.175" class="explorer"/>
+<rect x="219.93750000000003" y="449.77500000000003" width="365.51249999999993" height="215.175" class="editor"/>
+<text x="44.55000000000001" y="441.225" class="tiny">☰  DeGOAT Explorer</text>
+<text x="42.55000000000001" y="466.875" class="tiny">Pesquisar instâncias…</text>
+<text x="44.55000000000001" y="488.25" class="tree">▾ Workspace</text>
+<text x="54.55000000000001" y="502.5" class="tree">▤ Models</text>
+<text x="231.93750000000003" y="469.725" class="code">1  -- DeGOAT Instance Inspector</text>
+<text x="24" y="691.5" class="meta">janela 776×336 · explorer 263 · dividido</text><text x="644" y="405" class="label">captura landscape · 1024×461</text>
+<rect x="644" y="417" width="570.0" height="256.611328125" rx="8" class="viewport"/>
+<rect x="656.24609375" y="423.6796875" width="545.5078125" height="243.251953125" rx="6" class="window"/>
+<rect x="656.24609375" y="423.6796875" width="545.5078125" height="18.92578125" rx="6" class="title"/>
+<rect x="656.24609375" y="442.60546875" width="185.361328125" height="224.326171875" class="explorer"/>
+<rect x="841.607421875" y="442.60546875" width="360.146484375" height="224.326171875" class="editor"/>
+<text x="668.24609375" y="435.92578125" class="tiny">☰  DeGOAT Explorer</text>
+<text x="666.24609375" y="455.96484375" class="tiny">Pesquisar instâncias…</text>
+<text x="668.24609375" y="472.6640625" class="tree">▾ Workspace</text>
+<text x="678.24609375" y="483.796875" class="tree">▤ Models</text>
+<text x="853.607421875" y="458.19140625" class="code">1  -- DeGOAT Instance Inspector</text>
+<text x="644" y="691.611328125" class="meta">janela 980×437 · explorer 333 · dividido</text><text x="24" y="760" class="label">laptop/tablet · 1280×720</text>
+<rect x="24" y="772" width="506.66666666666663" height="285.0" rx="8" class="viewport"/>
+<rect x="83.375" y="791.7916666666666" width="387.91666666666663" height="245.41666666666666" rx="6" class="window"/>
+<rect x="83.375" y="791.7916666666666" width="387.91666666666663" height="13.458333333333332" rx="6" class="title"/>
+<rect x="83.375" y="805.25" width="130.625" height="231.95833333333331" class="explorer"/>
+<rect x="214.0" y="805.25" width="257.29166666666663" height="231.95833333333331" class="editor"/>
+<text x="95.375" y="800.5" class="tiny">☰  DeGOAT Explorer</text>
+<text x="93.375" y="814.75" class="tiny">Pesquisar instâncias…</text>
+<text x="95.375" y="826.625" class="tree">▾ Workspace</text>
+<text x="105.375" y="834.5416666666666" class="tree">▤ Models</text>
+<text x="226.0" y="816.3333333333333" class="code">1  -- DeGOAT Instance Inspector</text>
+<text x="24" y="1075.0" class="meta">janela 980×620 · explorer 330 · dividido</text><text x="644" y="760" class="label">desktop · 1440×900</text>
+<rect x="644" y="772" width="456.0" height="285.0" rx="8" class="viewport"/>
+<rect x="716.8333333333334" y="816.3333333333334" width="310.3333333333333" height="196.33333333333331" rx="6" class="window"/>
+<rect x="716.8333333333334" y="816.3333333333334" width="310.3333333333333" height="10.766666666666666" rx="6" class="title"/>
+<rect x="716.8333333333334" y="827.1" width="104.5" height="185.56666666666666" class="explorer"/>
+<rect x="821.3333333333334" y="827.1" width="205.83333333333331" height="185.56666666666666" class="editor"/>
+<text x="728.8333333333334" y="823.3000000000001" class="tiny">☰  DeGOAT Explorer</text>
+<text x="726.8333333333334" y="834.7" class="tiny">Pesquisar instâncias…</text>
+<text x="728.8333333333334" y="844.2" class="tree">▾ Workspace</text>
+<text x="738.8333333333334" y="850.5333333333334" class="tree">▤ Models</text>
+<text x="833.3333333333334" y="835.9666666666667" class="code">1  -- DeGOAT Instance Inspector</text>
+<text x="644" y="1075.0" class="meta">janela 980×620 · explorer 330 · dividido</text></svg>
